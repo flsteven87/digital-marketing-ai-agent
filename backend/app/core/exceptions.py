@@ -67,3 +67,24 @@ class InternalServerErrorException(AppException):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail,
         )
+
+
+# Authentication specific exceptions
+class AuthenticationError(Exception):
+    """Raised when authentication fails."""
+    pass
+
+
+class UserNotFoundError(Exception):
+    """Raised when user is not found."""
+    pass
+
+
+class InvalidTokenError(Exception):
+    """Raised when token is invalid."""
+    pass
+
+
+class TokenExpiredError(Exception):
+    """Raised when token has expired."""
+    pass

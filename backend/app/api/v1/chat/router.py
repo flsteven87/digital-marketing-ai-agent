@@ -5,7 +5,7 @@ import json
 
 from app.schemas.chat import ChatMessage, ChatSession, ChatRequest, ChatResponse
 from app.schemas.user import User
-from app.services.ai.chat_service import ChatService
+from app.services.ai.chat_orchestrator import ChatService
 from app.api.deps import get_current_user
 
 router = APIRouter()
@@ -88,12 +88,61 @@ async def test_chat(
     request: ChatRequest
 ) -> Any:
     """Test endpoint without authentication for POC"""
-    response = await chat_service.process_message(
+    # Get or create session for demo user
+    session_info = await chat_service.get_or_create_session(
         session_id=request.session_id,
-        message=request.message,
-        user_id="test_user"
+        user_id="demo_user"
     )
-    return ChatResponse(message=response, session_id=request.session_id)
+    
+    response = await chat_service.process_message(
+        session_id=session_info["session_id"],
+        message=request.message,
+        user_id="demo_user"
+    )
+    return ChatResponse(message=response, session_id=session_info["session_id"])
+
+
+@router.put("/sessions/{session_id}/title")
+async def update_session_title(
+    session_id: str,
+    title: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Update session title manually"""
+    from uuid import UUID
+    success = await chat_service.db_service.update_session_title(
+        UUID(session_id), UUID(current_user.id), title
+    )
+    return {"success": success}
+
+
+@router.post("/sessions/{session_id}/generate-title")
+async def generate_session_title(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Generate smart title for session"""
+    title = await chat_service.generate_session_title(session_id, current_user.id)
+    return {"title": title}
+
+
+@router.delete("/sessions/{session_id}")
+async def archive_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Archive a chat session"""
+    from uuid import UUID
+    success = await chat_service.db_service.archive_session(
+        UUID(session_id), UUID(current_user.id)
+    )
+    return {"success": success}
+
+
+@router.get("/test/sessions")
+async def get_demo_sessions() -> Any:
+    """Get demo sessions for testing"""
+    return await chat_service.get_user_sessions("demo_user", 0, 20)
 
 
 @router.websocket("/ws/{session_id}")
@@ -110,7 +159,7 @@ async def websocket_endpoint(
             async for chunk in chat_service.process_message_stream(
                 session_id=session_id,
                 message=message["content"],
-                user_id=message.get("user_id")
+                user_id=message.get("user_id", "demo_user")
             ):
                 await websocket.send_json(chunk)
                 

@@ -9,7 +9,7 @@ from app.core.middleware import (
     LoggingMiddleware,
     setup_cors_middleware
 )
-from app.api.v1.router_simple import api_router
+from app.api.v1.router import api_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

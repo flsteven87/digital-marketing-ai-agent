@@ -23,76 +23,103 @@ uv add --dev pytest black  # Add to dev dependencies
 
 ### Running the Application
 
-**IMPORTANT: Always shut down existing services before starting new ones to avoid port conflicts.**
+**CRITICAL: Background Service Management**
 
-**Service Management Rule**: Before starting any service, ALWAYS stop any existing instances first:
-- Check for running processes on required ports (8000 for backend, 3000 for frontend)
-- Use `lsof -i :8000` to check port 8000 usage
-- Use `lsof -i :3000` to check port 3000 usage  
-- Kill existing processes with `kill -9 <PID>` if needed
-- This prevents "Address already in use" errors and ensures clean service startup
+To prevent Claude Code from timing out (120s), services should be started in the background. Use the provided service management functions.
 
-#### Backend (FastAPI)
+#### Quick Start (Recommended)
 ```bash
-# Shut down any existing backend service first
-# Use Ctrl+C in the terminal or kill the process
+# Load service management functions
+source /Users/po-chi/Desktop/digital-marketing-ai-agent/scripts/start-services.sh
 
-# Start development server
-cd backend
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Start all services in background (no timeouts!)
+start_all
 
-# Database setup
-uv run python scripts/setup_db.py
+# Check service status
+check_services
+
+# Stop all services when done
+stop_services
 ```
 
-#### Frontend (Next.js)
+#### One-Line Startup
 ```bash
-# Shut down any existing frontend service first  
-# Use Ctrl+C in the terminal or kill the process
-
-# Start development server
-cd frontend
-npm run dev
-# If port 3000 is in use, Next.js will automatically use port 3001
+# Combined command for fastest startup
+source /Users/po-chi/Desktop/digital-marketing-ai-agent/scripts/start-services.sh && start_all
 ```
 
-#### Full Stack Development
+#### Service Management Functions
 ```bash
-# Terminal 1: Start backend
+# Available functions after sourcing scripts/start-services.sh:
+start_backend     # Start FastAPI backend in background
+start_frontend    # Start Next.js frontend in background
+start_all         # Start both services in background
+check_services    # Check if services are running and responding
+stop_services     # Stop all services
+restart_services  # Restart all services
+```
+
+#### Manual Service Startup (Alternative)
+If you need to start services manually in foreground:
+
+**Backend (FastAPI)**
+```bash
+# ALWAYS kill existing processes first
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+
+# Start backend (will appear to hang - this is normal)
 cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Terminal 2: Start frontend
-cd frontend && npm run dev
+# Service is ready when you see: "INFO: Uvicorn running on http://0.0.0.0:8000"
 ```
+
+**Frontend (Next.js)**
+```bash
+# ALWAYS kill existing processes first  
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+
+# Start frontend (will appear to hang - this is normal)
+cd frontend && npm run dev
+# Service is ready when you see: "✓ Ready in XXXXms"
+```
+
+#### Service Requirements
+- **Backend**: Must run on port 8000
+- **Frontend**: Must run on port 3000 (OAuth configured for this port)
+- **Port Conflicts**: Always kill existing processes before starting
+- **Background Logs**: Check `backend.log` and `frontend.log` for service output
 
 #### Service Status Detection
 
 **IMPORTANT: How to know when services are ready**
 
-When starting services, they may appear to "hang" but are actually running successfully. Look for these indicators:
+**Using Background Services (Recommended)**
+```bash
+# Check if services are running and responding
+check_services
+# Output will show:
+# ✅ Backend: Running on port 8000
+#    API responding
+# ✅ Frontend: Running on port 3000
+```
+
+**Manual Startup Indicators**
+When starting services manually, they appear to "hang" but are actually running:
 
 **Backend is ready when you see:**
-- `INFO:     Uvicorn running on http://0.0.0.0:8000`
-- `✅ Database initialized successfully`
-- No new log output for 5+ seconds (service is idle and ready)
-
-**IMPORTANT: Service Startup Behavior**
-- Services may appear to "hang" after showing startup messages - this is NORMAL
-- Don't wait for the full 120-second timeout unless there are actual errors
-- Once you see the "running on" message, the service is ready to accept requests
-- You can immediately test API endpoints or proceed with development
-- Only wait longer if you see error messages or exceptions
+- `INFO: Uvicorn running on http://0.0.0.0:8000`
+- `INFO: Application startup complete.`
+- No new log output (service is idle and ready)
 
 **Frontend is ready when you see:**
-- `✓ Ready in XXXXms`  
-- `- Local:        http://localhost:3000`
-- No new log output for 5+ seconds (service is idle and ready)
+- `✓ Ready in XXXXms`
+- `- Local: http://localhost:3000` (MUST be 3000, not 3001)
+- No new log output (service is idle and ready)
 
-**IMPORTANT: Frontend Startup Behavior**
-- Next.js may appear to "hang" after compilation - this is NORMAL
-- Don't wait for timeouts unless there are actual build errors
-- Once you see "Ready in XXXXms", the frontend is serving requests
-- You can immediately open the browser or test the application
+**CRITICAL: Avoiding Timeouts**
+- **Never wait for 120s timeout** - services are ready much sooner
+- Use background startup (`start_all`) to prevent Claude Code timeouts
+- Test API endpoints immediately after seeing startup messages
+- Services appearing to "hang" after startup is NORMAL behavior
 
 ## Architecture
 
@@ -142,4 +169,8 @@ This project uses `pyproject.toml` for dependency management with uv. Always use
 - `uv pip sync` to install all dependencies
 - `uv run <command>` to run any Python commands
 - Never use requirements.txt
-- Never call python directly, always use `uv run python`
+- **CRITICAL: Never call python directly, always use `uv run python`**
+- For all Python scripts: `uv run python script.py` (not just `python script.py`)
+- For running modules: `uv run python -m module_name`
+- For Django/Flask management: `uv run python manage.py <command>`
+- This ensures proper virtual environment isolation and dependency management
