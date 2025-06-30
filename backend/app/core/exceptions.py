@@ -69,22 +69,54 @@ class InternalServerErrorException(AppException):
         )
 
 
+# Base business logic exception
+class BusinessLogicError(Exception):
+    """Base class for business logic exceptions."""
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        self.message = message
+        self.details = details or {}
+        super().__init__(message)
+
+
 # Authentication specific exceptions
-class AuthenticationError(Exception):
+class AuthenticationError(BusinessLogicError):
     """Raised when authentication fails."""
     pass
 
 
-class UserNotFoundError(Exception):
+class UserNotFoundError(BusinessLogicError):
     """Raised when user is not found."""
     pass
 
 
-class InvalidTokenError(Exception):
+class InvalidTokenError(BusinessLogicError):
     """Raised when token is invalid."""
     pass
 
 
-class TokenExpiredError(Exception):
+class TokenExpiredError(BusinessLogicError):
     """Raised when token has expired."""
+    pass
+
+
+# Database operation exceptions
+class DatabaseOperationError(BusinessLogicError):
+    """Raised when database operation fails."""
+    pass
+
+
+class DuplicateResourceError(BusinessLogicError):
+    """Raised when trying to create a resource that already exists."""
+    pass
+
+
+# Validation exceptions
+class ValidationError(BusinessLogicError):
+    """Raised when data validation fails."""
+    pass
+
+
+# Permission exceptions
+class PermissionDeniedError(BusinessLogicError):
+    """Raised when user lacks required permissions."""
     pass

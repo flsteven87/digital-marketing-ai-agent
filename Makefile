@@ -1,4 +1,4 @@
-.PHONY: help dev up down logs build test clean prod shell-backend shell-frontend migrate
+.PHONY: help dev up down logs build test clean prod shell-backend shell-frontend migrate fresh-start clean-db test-system
 
 # Default target
 .DEFAULT_GOAL := help
@@ -63,6 +63,16 @@ clean: ## Remove all containers, volumes, and images
 	docker-compose down -v --rmi all
 	@echo "${GREEN}✓ Cleanup completed${NC}"
 
+clean-cache: ## Clean Docker build cache to free up disk space
+	@echo "${YELLOW}Cleaning Docker build cache...${NC}"
+	docker builder prune -af
+	@echo "${GREEN}✓ Build cache cleaned${NC}"
+
+clean-all: clean clean-cache ## Deep clean - remove everything including unused Docker resources
+	@echo "${YELLOW}Performing deep clean...${NC}"
+	docker system prune -af --volumes
+	@echo "${GREEN}✓ Deep clean completed${NC}"
+
 prod: ## Start production environment
 	docker-compose -f docker-compose.prod.yml up -d
 	@echo "${GREEN}✓ Production environment started${NC}"
@@ -81,11 +91,11 @@ shell-frontend: ## Open shell in frontend container
 	docker-compose exec frontend /bin/sh
 
 migrate: ## Run database migrations
-	docker-compose exec backend python scripts/create_tables.py
+	docker-compose exec backend uv run scripts/create_tables.py
 	@echo "${GREEN}✓ Database migrations completed${NC}"
 
 reset-db: ## Reset database (drop and recreate tables)
-	docker-compose exec backend python scripts/create_tables.py reset
+	docker-compose exec backend uv run scripts/create_tables.py reset
 	@echo "${GREEN}✓ Database reset completed${NC}"
 
 ps: ## Show running containers
@@ -108,3 +118,46 @@ env-example: ## Create .env.example files
 	@cp backend/.env backend/.env.example 2>/dev/null || echo "${YELLOW}Backend .env not found${NC}"
 	@cp frontend/.env.local frontend/.env.example 2>/dev/null || echo "${YELLOW}Frontend .env.local not found${NC}"
 	@echo "${GREEN}✓ .env.example files created${NC}"
+
+fresh-start: ## Clean database and restart everything (Phase 1 modernization)
+	@echo "${BLUE}🚀 Starting fresh with modern async SQLAlchemy architecture${NC}"
+	@echo "${YELLOW}This will delete ALL database data and restart services${NC}"
+	@read -p "Are you sure? (y/N) " -n 1 -r; \
+	echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "${BLUE}Stopping all services...${NC}"; \
+		$(MAKE) down; \
+		echo "${BLUE}Cleaning up containers (keeping Python dependencies)...${NC}"; \
+		docker-compose down; \
+		docker volume rm digital-marketing-ai-agent_redis-data 2>/dev/null || true; \
+		echo "${BLUE}Starting services...${NC}"; \
+		$(MAKE) up; \
+		echo "${BLUE}Waiting for services to be ready...${NC}"; \
+		sleep 10; \
+		echo "${BLUE}Resetting database with modern schema...${NC}"; \
+		docker-compose exec backend uv run scripts/create_tables.py reset --force; \
+		echo "${BLUE}Running system verification tests...${NC}"; \
+		docker-compose exec backend uv run scripts/test_system.py --wait; \
+		echo "${GREEN}✅ Fresh start completed!${NC}"; \
+		echo "${GREEN}Frontend: http://localhost:3000${NC}"; \
+		echo "${GREEN}Backend: http://localhost:8000${NC}"; \
+		echo "${GREEN}API Docs: http://localhost:8000/docs${NC}"; \
+	else \
+		echo "${YELLOW}Operation cancelled${NC}"; \
+	fi
+
+clean-db: ## Clean database only (keep containers running)
+	@echo "${YELLOW}This will delete ALL database data${NC}"
+	@read -p "Are you sure? (y/N) " -n 1 -r; \
+	echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		docker-compose exec backend uv run scripts/create_tables.py reset --force; \
+		echo "${GREEN}✓ Database cleaned and recreated${NC}"; \
+	else \
+		echo "${YELLOW}Operation cancelled${NC}"; \
+	fi
+
+test-system: ## Run system verification tests
+	@echo "${BLUE}Running system verification tests...${NC}"
+	docker-compose exec backend uv run scripts/test_system.py
+	@echo "${GREEN}✓ System tests completed${NC}"

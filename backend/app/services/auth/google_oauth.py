@@ -1,11 +1,13 @@
 """Google OAuth 2.0 service implementation using modern best practices."""
 
 import asyncio
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 import httpx
 from authlib.integrations.requests_client import OAuth2Session
 from authlib.common.errors import AuthlibBaseError
+import redis.asyncio as redis
 
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError
@@ -28,11 +30,40 @@ class GoogleOAuthService:
         # OAuth scopes
         self.scope = ["openid", "email", "profile"]
         
-        # Store sessions for proper state management
-        self._sessions = {}
+        # Redis client for state management
+        self.redis_client = None
+        self.state_expiry = 600  # 10 minutes
+
+    async def _get_redis_client(self):
+        """Get Redis client connection."""
+        if not self.redis_client:
+            self.redis_client = redis.from_url(settings.REDIS_URL)
+        return self.redis_client
+
+    async def _store_oauth_state(self, state: str, session_data: Dict):
+        """Store OAuth state in Redis."""
+        redis_client = await self._get_redis_client()
+        key = f"oauth_state:{state}"
+        await redis_client.setex(
+            key, 
+            self.state_expiry, 
+            json.dumps({
+                **session_data,
+                'created_at': datetime.now().isoformat()
+            })
+        )
+
+    async def _get_oauth_state(self, state: str) -> Optional[Dict]:
+        """Retrieve OAuth state from Redis."""
+        redis_client = await self._get_redis_client()
+        key = f"oauth_state:{state}"
+        data = await redis_client.get(key)
+        if data:
+            await redis_client.delete(key)  # Clean up after use
+            return json.loads(data)
+        return None
         
-    
-    def get_authorization_url(self, state: str = None) -> tuple[str, str]:
+    async def get_authorization_url(self, state: str = None) -> tuple[str, str]:
         """Generate Google OAuth authorization URL with proper session management."""
         client = OAuth2Session(
             client_id=self.client_id,
@@ -48,27 +79,35 @@ class GoogleOAuthService:
             access_type='offline'  # Request refresh token
         )
         
-        # Store the session for later token exchange
-        self._sessions[generated_state] = {
-            'client': client,
-            'created_at': datetime.now()
+        # Store the session data in Redis for later token exchange
+        session_data = {
+            'client_id': self.client_id,
+            'redirect_uri': self.redirect_uri,
+            'scope': self.scope
         }
+        
+        await self._store_oauth_state(generated_state, session_data)
         
         return authorization_url, generated_state
     
     async def exchange_code_for_token(self, code: str, state: str = None) -> Dict:
         """Exchange authorization code for access token using stored session."""
-        if not state or state not in self._sessions:
+        if not state:
+            raise AuthenticationError("Missing OAuth state parameter")
+            
+        # Retrieve the stored OAuth session data from Redis
+        session_data = await self._get_oauth_state(state)
+        if not session_data:
             raise AuthenticationError("Invalid or expired OAuth state")
         
-        # Retrieve the stored OAuth session
-        session_data = self._sessions[state]
-        client = session_data['client']
+        # Create a new OAuth client with the stored session data
+        client = OAuth2Session(
+            client_id=session_data['client_id'],
+            redirect_uri=session_data['redirect_uri'],
+            scope=session_data['scope']
+        )
         
-        # Clean up the stored session
-        del self._sessions[state]
-        
-        # Exchange code for token using the original session
+        # Exchange code for token
         try:
             token = await asyncio.to_thread(
                 client.fetch_token,

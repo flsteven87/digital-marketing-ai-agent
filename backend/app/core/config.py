@@ -28,11 +28,6 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: Optional[str] = None
     
-    # Supabase
-    SUPABASE_URL: Optional[str] = None
-    SUPABASE_ANON_KEY: Optional[str] = None
-    SUPABASE_SERVICE_KEY: Optional[str] = None
-    
     # OpenAI
     OPENAI_API_KEY: str
     OPENAI_MODEL: str = "gpt-4-turbo-preview"

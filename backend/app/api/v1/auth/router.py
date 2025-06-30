@@ -31,7 +31,7 @@ async def google_authorize() -> Any:
         )
     
     state = secrets.token_urlsafe(32)
-    authorization_url, _ = google_oauth.get_authorization_url(state=state)
+    authorization_url, _ = await google_oauth.get_authorization_url(state=state)
     
     return AuthorizationUrlResponse(
         authorization_url=authorization_url,

@@ -13,8 +13,7 @@ from .auth.google_oauth import GoogleOAuthService
 from .auth.jwt_service import JWTService
 from .auth.user_service import UserService
 
-# Database Services
-from .database.chat_repository import ChatDatabaseService
+# Database Services (legacy services removed, using modern async adapters)
 
 __all__ = [
     # AI
@@ -24,6 +23,5 @@ __all__ = [
     "GoogleOAuthService",
     "JWTService",
     "UserService",
-    # Database
-    "ChatDatabaseService",
+    # Database services now use modern async adapters
 ]

@@ -1,22 +1,41 @@
-"""User management service with OAuth integration using direct PostgreSQL."""
+"""User management service with OAuth integration using unified repository pattern."""
 
-import json
 from typing import Optional, Dict, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 from datetime import datetime
 
-from app.core.postgres import get_postgres
-from app.core.database import get_db_session
+from app.core.database_async import get_async_db
+from app.repositories.user import UserRepository
+from app.repositories.oauth import OAuthProviderRepository
 from app.models.user import User as UserModel, OAuthProvider
 from app.services.auth.jwt_service import JWTService
 from app.core.exceptions import AuthenticationError, UserNotFoundError
 
 
 class UserService:
-    """User management with OAuth and JWT integration."""
+    """User management with OAuth and JWT integration using unified repository pattern."""
     
     def __init__(self):
         self.jwt_service = JWTService()
+        self._session = None
+        self._user_repo = None
+        self._oauth_repo = None
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        async for session in get_async_db():
+            self._session = session
+            self._user_repo = UserRepository(UserModel, session)
+            self._oauth_repo = OAuthProviderRepository(OAuthProvider, session)
+            break
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        # Note: Session is managed by get_async_db dependency, don't close manually
+        self._session = None
+        self._user_repo = None
+        self._oauth_repo = None
     
     def _serialize_user_data(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert database types to API-ready format."""
@@ -25,6 +44,26 @@ class UserService:
             "id": str(user_data["id"]),
             "created_at": user_data["created_at"].isoformat(),
             "updated_at": user_data["updated_at"].isoformat(),
+        }
+    
+    def _convert_user_to_dict(self, user: UserModel) -> Dict[str, Any]:
+        """Convert SQLAlchemy User model to dictionary."""
+        return {
+            "id": user.id,
+            "email": user.email,
+            "email_verified": user.email_verified,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "locale": user.locale,
+            "company": user.company,
+            "role": user.role,
+            "phone": user.phone,
+            "timezone": user.timezone,
+            "is_active": user.is_active,
+            "metadata": user.user_metadata or {},
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+            "last_login_at": user.last_login_at
         }
     
     async def create_or_update_user_from_google(self, google_user_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,98 +108,75 @@ class UserService:
     
     async def create_user_from_google(self, google_user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create new user from Google OAuth data."""
-        db = await get_postgres()
+        if not self._user_repo:
+            raise RuntimeError("UserService must be used as async context manager")
         
-        # Generate UUID for the user
-        from uuid import uuid4
-        user_id = str(uuid4())
-        
-        query = """
-            INSERT INTO public.users (
-                id, email, email_verified, name, avatar_url, locale, 
-                role, is_active, metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        params = (
-            user_id,
-            google_user_data["email"],
-            google_user_data.get("email_verified", False),
-            google_user_data.get("name", ""),
-            google_user_data.get("picture", ""),
-            google_user_data.get("locale", "en"),
-            "user",
-            True,
-            json.dumps({
+        # Create user using repository
+        user = await self._user_repo.create(
+            email=google_user_data["email"],
+            email_verified=google_user_data.get("email_verified", False),
+            name=google_user_data.get("name", ""),
+            avatar_url=google_user_data.get("picture", ""),
+            locale=google_user_data.get("locale", "en"),
+            role="user",
+            is_active=True,
+            user_metadata={
                 "oauth_provider": "google",
                 "google_id": google_user_data["id"]
-            })
+            }
         )
         
-        result = await db.execute_insert(query, params)
-        return self._serialize_user_data(result)
+        return self._convert_user_to_dict(user)
     
     async def update_user_google_info(self, user_id: str, google_user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update existing user with Google OAuth data."""
-        db = await get_postgres()
+        if not self._user_repo:
+            raise RuntimeError("UserService must be used as async context manager")
         
-        query = """
-            UPDATE public.users SET
-                name = %s,
-                avatar_url = %s,
-                email_verified = %s,
-                last_login_at = NOW(),
-                updated_at = NOW()
-            WHERE id = %s
-        """
-        
-        params = (
-            google_user_data.get("name", ""),
-            google_user_data.get("picture", ""),
-            google_user_data.get("email_verified", False),
-            user_id
+        # Update user using repository
+        user = await self._user_repo.update(
+            UUID(user_id),
+            name=google_user_data.get("name", ""),
+            avatar_url=google_user_data.get("picture", ""),
+            email_verified=google_user_data.get("email_verified", False),
+            last_login_at=datetime.utcnow()
         )
         
-        result = await db.execute_update(query, params)
-        return self._serialize_user_data(result)
+        if not user:
+            raise UserNotFoundError(f"User with id {user_id} not found")
+        
+        return self._convert_user_to_dict(user)
     
     async def store_oauth_provider_info(self, user_id: str, provider: str, provider_data: Dict[str, Any]) -> None:
         """Store or update OAuth provider information."""
-        db = await get_postgres()
+        if not self._oauth_repo:
+            raise RuntimeError("UserService must be used as async context manager")
         
-        # Check if provider record exists
-        check_query = "SELECT id FROM public.oauth_providers WHERE user_id = %s AND provider = %s"
-        existing = await db.execute_query(check_query, (user_id, provider))
-        
-        if existing:
-            # Update existing record
-            update_query = """
-                UPDATE public.oauth_providers SET
-                    provider_data = %s, updated_at = NOW()
-                WHERE user_id = %s AND provider = %s
-            """
-            await db.execute_update(update_query, (json.dumps(provider_data), user_id, provider))
-        else:
-            # Insert new record
-            oauth_id = str(uuid4())
-            insert_query = """
-                INSERT INTO public.oauth_providers (
-                    id, user_id, provider, provider_user_id, provider_email, provider_data
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            params = (oauth_id, user_id, provider, provider_data["id"], provider_data["email"], json.dumps(provider_data))
-            await db.execute_insert(insert_query, params)
+        # Use repository to create or update OAuth provider
+        await self._oauth_repo.create_or_update_provider(
+            user_id=UUID(user_id),
+            provider=provider,
+            provider_user_id=provider_data["id"],
+            provider_email=provider_data.get("email"),
+            provider_data=provider_data
+        )
     
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email address."""
-        db = await get_postgres()
-        query = "SELECT * FROM public.users WHERE email = %s AND is_active = true"
-        results = await db.execute_query(query, (email,))
-        return results[0] if results else None
+        if not self._user_repo:
+            raise RuntimeError("UserService must be used as async context manager")
+        
+        user = await self._user_repo.get_by_email(email)
+        if user:
+            return self._convert_user_to_dict(user)
+        return None
     
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user by ID."""
-        db = await get_postgres()
-        query = "SELECT * FROM public.users WHERE id = %s AND is_active = true"
-        results = await db.execute_query(query, (user_id,))
-        return results[0] if results else None
+        if not self._user_repo:
+            raise RuntimeError("UserService must be used as async context manager")
+        
+        user = await self._user_repo.get(UUID(user_id))
+        if user:
+            return self._convert_user_to_dict(user)
+        return None

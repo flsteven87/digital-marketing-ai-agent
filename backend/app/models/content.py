@@ -54,7 +54,7 @@ class Brand(Base):
 
     # Relationships
     organization = relationship("Organization", back_populates="brands")
-    chat_sessions = relationship("ChatSession", back_populates="brand")
+    # Note: chat_sessions relationship removed (moved to async models)
     generated_content = relationship("GeneratedContent", back_populates="brand")
 
 
@@ -65,7 +65,8 @@ class GeneratedContent(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id", ondelete="SET NULL"), index=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="SET NULL"), index=True)
+    # Temporarily removed FK constraint to chat_sessions (moved to async models)
+    session_id = Column(UUID(as_uuid=True), index=True)
     content_type = Column(String(50), nullable=False, index=True)
     platform = Column(ARRAY(String))
     title = Column(String(255))
@@ -82,4 +83,4 @@ class GeneratedContent(Base):
     # Relationships
     user = relationship("User", back_populates="generated_content")
     brand = relationship("Brand", back_populates="generated_content")
-    session = relationship("ChatSession", back_populates="generated_content")
+    # Note: session relationship removed (chat_sessions moved to async models)

@@ -48,40 +48,4 @@ def get_db_session() -> Session:
     return SessionLocal()
 
 
-# Legacy Supabase support (to be phased out)
-from supabase import create_client, Client
-from supabase.client import ClientOptions
-from typing import AsyncGenerator
-
-
-class SupabaseClient:
-    """Legacy Supabase client - will be removed in future versions."""
-    _instance: Client = None
-    
-    @classmethod
-    def get_client(cls) -> Client:
-        if cls._instance is None:
-            options = ClientOptions(
-                postgrest_client_timeout=10,
-                storage_client_timeout=10,
-            )
-            cls._instance = create_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_SERVICE_KEY,
-                options=options
-            )
-        return cls._instance
-
-
-def get_supabase() -> Client:
-    """Legacy function - use get_db() instead."""
-    return SupabaseClient.get_client()
-
-
-async def get_async_supabase() -> AsyncGenerator[Client, None]:
-    """Legacy function - use get_db() instead."""
-    client = get_supabase()
-    try:
-        yield client
-    finally:
-        pass
+# Legacy sync SQLAlchemy - consider migrating to async version

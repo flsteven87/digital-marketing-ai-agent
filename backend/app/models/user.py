@@ -31,7 +31,7 @@ class User(Base):
     # Relationships
     oauth_providers = relationship("OAuthProvider", back_populates="user", cascade="all, delete-orphan")
     user_sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
-    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    # Note: chat_sessions relationship removed due to different base class (async models)
     organizations = relationship("Organization", back_populates="owner", cascade="all, delete-orphan")
     generated_content = relationship("GeneratedContent", back_populates="user", cascade="all, delete-orphan")
 

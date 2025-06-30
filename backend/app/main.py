@@ -9,6 +9,7 @@ from app.core.middleware import (
     LoggingMiddleware,
     setup_cors_middleware
 )
+from app.core.exception_handlers import setup_exception_handlers
 from app.api.v1.router import api_router
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +38,9 @@ app.add_middleware(
     allowed_hosts=["*"]  # Configure based on environment
 )
 setup_cors_middleware(app)
+
+# Setup exception handlers
+setup_exception_handlers(app)
 
 # Include routers
 app.include_router(api_router, prefix=settings.API_V1_STR)

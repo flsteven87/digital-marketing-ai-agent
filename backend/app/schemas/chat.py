@@ -41,7 +41,7 @@ class ChatMessageBase(BaseModel):
     """Base chat message schema."""
     role: Literal["user", "assistant", "system"]
     content: str
-    metadata: Dict[str, Any] = {}
+    message_metadata: Dict[str, Any] = {}
 
 
 class ChatMessageCreate(ChatMessageBase):

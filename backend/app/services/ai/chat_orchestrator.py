@@ -2,7 +2,7 @@ from typing import Any, AsyncGenerator
 from uuid import UUID, uuid4
 from datetime import datetime
 from app.services.ai.base_agent import BaseAgent
-from app.services.database.chat_repository import ChatDatabaseService
+from app.services.database.chat_service import ChatDatabaseService
 
 
 class ChatService:
@@ -19,13 +19,14 @@ class ChatService:
         user_uuid = self._get_user_uuid(user_id)
         title = title or f"Chat Session {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
-        session = await self.db_service.create_session(user_uuid, title=title)
-        return {
-            "session_id": str(session.id),
-            "user_id": user_id,
-            "title": session.title,
-            "created_at": session.created_at.isoformat()
-        }
+        async with self.db_service as db:
+            session = await db.create_session(user_uuid, title=title)
+            return {
+                "session_id": str(session.id),
+                "user_id": user_id,
+                "title": session.title,
+                "created_at": session.created_at if isinstance(session.created_at, str) else session.created_at.isoformat()
+            }
     
     async def get_user_sessions(self, user_id: str, skip: int = 0, limit: int = 10) -> list:
         user_uuid = self._get_user_uuid(user_id)
@@ -33,8 +34,8 @@ class ChatService:
         return [{
             "id": str(session.id),
             "title": session.title,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat()
+            "created_at": session.created_at if isinstance(session.created_at, str) else session.created_at.isoformat(),
+            "updated_at": session.updated_at if isinstance(session.updated_at, str) else session.updated_at.isoformat()
         } for session in sessions]
     
     async def get_session_messages(self, session_id: str, user_id: str, skip: int = 0, limit: int = 50) -> list:
@@ -50,7 +51,7 @@ class ChatService:
                 "id": str(message.id),
                 "role": message.role,
                 "content": message.content,
-                "created_at": message.created_at.isoformat()
+                "created_at": message.created_at if isinstance(message.created_at, str) else message.created_at.isoformat()
             } for message in messages]
         except Exception:
             return []
@@ -163,7 +164,7 @@ class ChatService:
                         "session_id": str(session.id),
                         "user_id": user_id,
                         "title": session.title,
-                        "created_at": session.created_at.isoformat()
+                        "created_at": session.created_at if isinstance(session.created_at, str) else session.created_at.isoformat()
                     }
             except Exception:
                 pass
