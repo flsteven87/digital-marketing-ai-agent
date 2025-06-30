@@ -43,9 +43,9 @@ export default function AuthCallback() {
         
         setStatus('success');
         
-        // Redirect to chat page
+        // Redirect to dashboard
         setTimeout(() => {
-          router.push('/chat');
+          router.push('/dashboard');
         }, 1000);
         
       } catch (error) {

@@ -61,15 +61,15 @@ class ChatMessage(ChatMessageBase):
 class ChatRequest(BaseModel):
     """Schema for chat request."""
     message: str
-    session_id: Optional[UUID] = None
+    session_id: Optional[str] = None
     user_id: str = "demo_user"  # Default for demo
 
 
 class ChatResponse(BaseModel):
     """Schema for chat response."""
     message: str
-    session_id: UUID
-    message_id: UUID
+    session_id: str
+    message_id: str
     created_at: datetime
 
 

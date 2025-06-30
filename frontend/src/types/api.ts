@@ -16,13 +16,16 @@ export interface ChatSession {
 }
 
 export interface ChatRequest {
-  session_id: string;
   message: string;
+  session_id?: string;
+  user_id?: string;
 }
 
 export interface ChatResponse {
   message: string;
   session_id: string;
+  message_id?: string;
+  created_at?: string;
 }
 
 export interface ApiError {

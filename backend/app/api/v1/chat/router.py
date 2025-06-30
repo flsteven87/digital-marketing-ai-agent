@@ -84,22 +84,34 @@ async def send_simple_message(
 
 
 @router.post("/test", response_model=ChatResponse)
-async def test_chat(
-    request: ChatRequest
-) -> Any:
+async def test_chat(request: ChatRequest) -> Any:
     """Test endpoint without authentication for POC"""
-    # Get or create session for demo user
-    session_info = await chat_service.get_or_create_session(
-        session_id=request.session_id,
-        user_id="demo_user"
-    )
+    from uuid import uuid4
+    from datetime import datetime
     
-    response = await chat_service.process_message(
-        session_id=session_info["session_id"],
-        message=request.message,
-        user_id="demo_user"
-    )
-    return ChatResponse(message=response, session_id=session_info["session_id"])
+    demo_session_id = request.session_id or f"demo-session-{str(uuid4())[:8]}"
+    
+    try:
+        ai_response = await chat_service.agent.invoke(
+            message=request.message,
+            session_id=demo_session_id
+        )
+        
+        return ChatResponse(
+            message=ai_response,
+            session_id=demo_session_id,
+            message_id=str(uuid4()),
+            created_at=datetime.now()
+        )
+    except Exception as e:
+        print(f"AI processing error: {e}")
+        
+        return ChatResponse(
+            message="Sorry, I'm experiencing technical difficulties. Please try again.",
+            session_id=demo_session_id,
+            message_id=str(uuid4()),
+            created_at=datetime.now()
+        )
 
 
 @router.put("/sessions/{session_id}/title")
