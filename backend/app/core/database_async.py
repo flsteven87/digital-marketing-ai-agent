@@ -24,18 +24,23 @@ def create_async_database_engine():
     # Convert to async URL and handle PostgreSQL connection string
     database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
     
-    return create_async_engine(
-        database_url,
-        echo=False,  # Set to True for SQL debugging
-        pool_pre_ping=True,  # Verify connections before use
-        pool_recycle=300,    # Recycle connections every 5 minutes
-        pool_size=10,        # Number of connections to maintain
-        max_overflow=20,     # Additional connections for burst traffic
-        # Use NullPool for serverless/testing environments
-        poolclass=NullPool if settings.ENVIRONMENT == "test" else None,
+    # NullPool doesn't support pool_size/max_overflow
+    engine_kwargs = {
+        "echo": False,  # Set to True for SQL debugging
+        "pool_pre_ping": True,  # Verify connections before use
+        # Use NullPool for pgbouncer compatibility
+        "poolclass": NullPool,  # Always use NullPool with pgbouncer
         # Disable prepared statement caching for pgbouncer compatibility
-        connect_args={"statement_cache_size": 0},
-    )
+        "connect_args": {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "server_settings": {
+                "jit": "off"
+            }
+        },
+    }
+    
+    return create_async_engine(database_url, **engine_kwargs)
 
 
 # Create engine and session factory
@@ -56,7 +61,11 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     Provides automatic transaction management:
     - Commits on success
     - Rollbacks on exception
-    - Always closes session
+    - Session lifecycle managed by AsyncSessionLocal context manager
+    
+    Note: You may see IllegalStateChangeError exceptions during shutdown.
+    This is a known issue with SQLAlchemy async + pgbouncer when the event
+    loop closes. It doesn't affect normal operation and can be safely ignored.
     """
     async with AsyncSessionLocal() as session:
         try:
@@ -65,8 +74,6 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 
 
 async def init_async_db():
