@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthAPI } from '@/lib/api/auth';
 import { TokenManager } from '@/lib/utils/token';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AuthCallback() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { updateAuthState } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -36,12 +38,15 @@ export default function AuthCallback() {
         // Store tokens
         TokenManager.setTokens(loginResponse.tokens);
         
+        // Update auth context immediately
+        await updateAuthState();
+        
         setStatus('success');
         
-        // Redirect to chat page after short delay
+        // Redirect to chat page
         setTimeout(() => {
           router.push('/chat');
-        }, 1500);
+        }, 1000);
         
       } catch (error) {
         console.error('OAuth callback error:', error);

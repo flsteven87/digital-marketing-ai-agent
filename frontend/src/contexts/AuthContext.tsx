@@ -21,37 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initializeAuth = async () => {
     try {
-      const accessToken = TokenManager.getAccessToken();
-      
-      if (!accessToken) {
-        setState(prev => ({ ...prev, isLoading: false }));
-        return;
-      }
-
-      // Check if token is expired
-      if (TokenManager.isTokenExpired(accessToken)) {
-        const refreshTokenValue = TokenManager.getRefreshToken();
-        if (refreshTokenValue) {
-          const success = await refreshToken();
-          if (!success) {
-            TokenManager.clearTokens();
-            setState(prev => ({ ...prev, isLoading: false }));
-            return;
-          }
-        } else {
-          TokenManager.clearTokens();
-          setState(prev => ({ ...prev, isLoading: false }));
-          return;
-        }
-      }
-
-      // Get current user
-      const user = await AuthAPI.getCurrentUser(TokenManager.getAccessToken()!);
-      setState({
-        user,
-        isLoading: false,
-        isAuthenticated: true,
-      });
+      await updateAuthState();
     } catch (error) {
       console.error('Auth initialization failed:', error);
       TokenManager.clearTokens();
@@ -63,11 +33,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
       
-      // Get Google OAuth URL
-      const { authorization_url } = await AuthAPI.getGoogleAuthUrl();
+      const response = await AuthAPI.getGoogleAuthUrl();
       
-      // Redirect to Google OAuth
-      window.location.href = authorization_url;
+      if (!response.authorization_url) {
+        throw new Error('No authorization URL received');
+      }
+      
+      window.location.href = response.authorization_url;
+      
     } catch (error) {
       console.error('Login failed:', error);
       setState(prev => ({ ...prev, isLoading: false }));
@@ -106,8 +79,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error) {
       console.error('Token refresh failed:', error);
+      // Clear invalid tokens on refresh failure
+      TokenManager.clearTokens();
       return false;
     }
+  };
+
+  const updateAuthState = async (): Promise<void> => {
+    const accessToken = TokenManager.getAccessToken();
+    
+    // No token or expired token
+    if (!accessToken || TokenManager.isTokenExpired(accessToken)) {
+      const refreshTokenValue = TokenManager.getRefreshToken();
+      if (refreshTokenValue && refreshTokenValue.trim()) {
+        const success = await refreshToken();
+        if (!success) {
+          _setUnauthenticatedState();
+          return;
+        }
+      } else {
+        TokenManager.clearTokens();
+        _setUnauthenticatedState();
+        return;
+      }
+    }
+
+    // Try to get current user with valid token
+    try {
+      const currentToken = TokenManager.getAccessToken();
+      if (currentToken && !TokenManager.isTokenExpired(currentToken)) {
+        const user = await AuthAPI.getCurrentUser(currentToken);
+        setState({
+          user,
+          isLoading: false,
+          isAuthenticated: true,
+        });
+      } else {
+        _setUnauthenticatedState();
+      }
+    } catch (error) {
+      TokenManager.clearTokens();
+      _setUnauthenticatedState();
+    }
+  };
+
+  const _setUnauthenticatedState = () => {
+    setState({
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+    });
   };
 
   const value: AuthContextType = {
@@ -115,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     refreshToken,
+    updateAuthState,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

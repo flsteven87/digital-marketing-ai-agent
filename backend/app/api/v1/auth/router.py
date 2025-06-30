@@ -6,7 +6,7 @@ import secrets
 from app.core import security
 from app.schemas.auth import (
     Token, UserRegister, GoogleOAuthRequest, LoginResponse,
-    AuthorizationUrlResponse, TokenResponse, UserProfile
+    AuthorizationUrlResponse, TokenResponse, UserProfile, RefreshTokenRequest
 )
 from app.schemas.user import User, UserCreate
 from app.services.auth.user_service import UserService
@@ -106,10 +106,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
     )
 
 
-@router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str) -> Any:
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(request: RefreshTokenRequest) -> Any:
     """Refresh access token using refresh token."""
     try:
+        refresh_token = request.refresh_token
+        
         payload = security.decode_token(refresh_token)
         if payload.type != "refresh":
             raise HTTPException(
@@ -117,18 +119,17 @@ async def refresh_token(refresh_token: str) -> Any:
                 detail="Invalid token type"
             )
         
-        # For now, we'll validate the token but not fetch user details
-        # In production, this would fetch from user service
         if not payload.sub:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invalid token payload"
             )
         
-        access_token = security.create_access_token(user.id)
-        new_refresh_token = security.create_refresh_token(user.id)
+        # Generate new tokens using the user ID from the payload
+        access_token = security.create_access_token(payload.sub)
+        new_refresh_token = security.create_refresh_token(payload.sub)
         
-        return Token(
+        return TokenResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
             token_type="bearer"

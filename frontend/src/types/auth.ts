@@ -32,6 +32,7 @@ export interface AuthContextType extends AuthState {
   login: () => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<boolean>;
+  updateAuthState: () => Promise<void>;
 }
 
 export interface GoogleAuthResponse {

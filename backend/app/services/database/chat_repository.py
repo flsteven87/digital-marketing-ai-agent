@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 
 from app.core.database import get_supabase
-from app.models.chat import ChatSessionModel, ChatMessageModel
+from app.models.chat import ChatSession, ChatMessage
 
 
 class ChatDatabaseService:
@@ -15,7 +15,7 @@ class ChatDatabaseService:
         user_id: UUID, 
         brand_id: Optional[UUID] = None,
         title: Optional[str] = None
-    ) -> ChatSessionModel:
+    ) -> ChatSession:
         """Create a new chat session"""
         session_data = {
             "id": str(uuid4()),
@@ -29,7 +29,7 @@ class ChatDatabaseService:
         result = self.supabase.table("chat_sessions").insert(session_data).execute()
         
         if result.data:
-            return ChatSessionModel(**result.data[0])
+            return ChatSession(**result.data[0])
         raise Exception("Failed to create chat session")
     
     async def get_user_sessions(
@@ -37,7 +37,7 @@ class ChatDatabaseService:
         user_id: UUID, 
         skip: int = 0, 
         limit: int = 10
-    ) -> List[ChatSessionModel]:
+    ) -> List[ChatSession]:
         """Get chat sessions for a user"""
         result = self.supabase.table("chat_sessions")\
             .select("*")\
@@ -47,9 +47,9 @@ class ChatDatabaseService:
             .range(skip, skip + limit - 1)\
             .execute()
         
-        return [ChatSessionModel(**session) for session in result.data]
+        return [ChatSession(**session) for session in result.data]
     
-    async def get_session(self, session_id: UUID, user_id: UUID) -> Optional[ChatSessionModel]:
+    async def get_session(self, session_id: UUID, user_id: UUID) -> Optional[ChatSession]:
         """Get a specific chat session"""
         result = self.supabase.table("chat_sessions")\
             .select("*")\
@@ -59,7 +59,7 @@ class ChatDatabaseService:
             .execute()
         
         if result.data:
-            return ChatSessionModel(**result.data)
+            return ChatSession(**result.data)
         return None
     
     async def add_message(
@@ -68,7 +68,7 @@ class ChatDatabaseService:
         role: str,
         content: str,
         metadata: Dict[str, Any] = None
-    ) -> ChatMessageModel:
+    ) -> ChatMessage:
         """Add a message to a chat session"""
         message_data = {
             "id": str(uuid4()),
@@ -87,7 +87,7 @@ class ChatDatabaseService:
                 .eq("id", str(session_id))\
                 .execute()
             
-            return ChatMessageModel(**result.data[0])
+            return ChatMessage(**result.data[0])
         raise Exception("Failed to add message")
     
     async def get_session_messages(
@@ -96,7 +96,7 @@ class ChatDatabaseService:
         user_id: UUID,
         skip: int = 0, 
         limit: int = 50
-    ) -> List[ChatMessageModel]:
+    ) -> List[ChatMessage]:
         """Get messages for a chat session"""
         # First verify user owns the session
         session = await self.get_session(session_id, user_id)
@@ -110,7 +110,7 @@ class ChatDatabaseService:
             .range(skip, skip + limit - 1)\
             .execute()
         
-        return [ChatMessageModel(**message) for message in result.data]
+        return [ChatMessage(**message) for message in result.data]
     
     async def update_session_title(
         self, 

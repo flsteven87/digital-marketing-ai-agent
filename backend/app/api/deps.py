@@ -6,12 +6,34 @@ from pydantic import ValidationError
 
 from app.core import security
 from app.core.config import settings
-from app.core.database import get_supabase
+from app.core.database import get_db_session
 from app.schemas.user import User
+from app.models.user import User as UserModel
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
+
+
+def _convert_user_model_to_schema(user: UserModel) -> User:
+    """Convert SQLAlchemy User model to Pydantic User schema."""
+    return User(
+        id=user.id,
+        email=user.email,
+        email_verified=user.email_verified,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        company=user.company,
+        role=user.role,
+        phone=user.phone,
+        timezone=user.timezone or "UTC",
+        locale=user.locale or "en",
+        is_active=user.is_active,
+        metadata=user.user_metadata or {},
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        last_login_at=user.last_login_at
+    )
 
 
 async def get_current_user(
@@ -33,14 +55,16 @@ async def get_current_user(
     except (JWTError, ValidationError):
         raise credentials_exception
     
-    # Get user from database
-    supabase = get_supabase()
-    response = supabase.table("users").select("*").eq("id", user_id).single().execute()
-    
-    if not response.data:
-        raise credentials_exception
-    
-    return User(**response.data)
+    # Get user from database using SQLAlchemy
+    db = get_db_session()
+    try:
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            raise credentials_exception
+        
+        return _convert_user_model_to_schema(user)
+    finally:
+        db.close()
 
 
 async def get_current_active_user(

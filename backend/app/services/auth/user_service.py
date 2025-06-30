@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 from datetime import datetime
 
 from app.core.postgres import get_postgres
+from app.core.database import get_db_session
+from app.models.user import User as UserModel, OAuthProvider
 from app.services.auth.jwt_service import JWTService
 from app.core.exceptions import AuthenticationError, UserNotFoundError
 
@@ -69,14 +71,19 @@ class UserService:
         """Create new user from Google OAuth data."""
         db = await get_postgres()
         
+        # Generate UUID for the user
+        from uuid import uuid4
+        user_id = str(uuid4())
+        
         query = """
             INSERT INTO public.users (
-                email, email_verified, name, avatar_url, locale, 
+                id, email, email_verified, name, avatar_url, locale, 
                 role, is_active, metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         params = (
+            user_id,
             google_user_data["email"],
             google_user_data.get("email_verified", False),
             google_user_data.get("name", ""),
@@ -135,12 +142,13 @@ class UserService:
             await db.execute_update(update_query, (json.dumps(provider_data), user_id, provider))
         else:
             # Insert new record
+            oauth_id = str(uuid4())
             insert_query = """
                 INSERT INTO public.oauth_providers (
-                    user_id, provider, provider_user_id, provider_email, provider_data
-                ) VALUES (%s, %s, %s, %s, %s)
+                    id, user_id, provider, provider_user_id, provider_email, provider_data
+                ) VALUES (%s, %s, %s, %s, %s, %s)
             """
-            params = (user_id, provider, provider_data["id"], provider_data["email"], json.dumps(provider_data))
+            params = (oauth_id, user_id, provider, provider_data["id"], provider_data["email"], json.dumps(provider_data))
             await db.execute_insert(insert_query, params)
     
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:

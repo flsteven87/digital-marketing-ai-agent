@@ -30,6 +30,7 @@ class GoogleOAuthService:
         
         # Store sessions for proper state management
         self._sessions = {}
+        
     
     def get_authorization_url(self, state: str = None) -> tuple[str, str]:
         """Generate Google OAuth authorization URL with proper session management."""
@@ -39,10 +40,12 @@ class GoogleOAuthService:
             scope=self.scope
         )
         
-        # Generate authorization URL
+        # Generate authorization URL with forced consent
         authorization_url, generated_state = client.create_authorization_url(
             self.authorization_url,
-            state=state
+            state=state,
+            prompt='consent',  # Force consent screen
+            access_type='offline'  # Request refresh token
         )
         
         # Store the session for later token exchange

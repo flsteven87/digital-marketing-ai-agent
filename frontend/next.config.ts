@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
+  // Disable image optimization for Docker (can be enabled with custom loader)
+  images: {
+    unoptimized: true,
+  },
 };
 
 export default nextConfig;

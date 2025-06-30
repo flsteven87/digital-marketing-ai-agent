@@ -8,8 +8,12 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import settings
 
 # Create SQLAlchemy engine with psycopg 3
+if not settings.DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is required")
+
+database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
 engine = create_engine(
-    settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"),
+    database_url,
     echo=False,  # Set to True for SQL debugging
     pool_pre_ping=True,  # Verify connections before use
     pool_recycle=300,    # Recycle connections every 5 minutes
