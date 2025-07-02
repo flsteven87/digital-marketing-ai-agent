@@ -108,7 +108,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const currentToken = TokenManager.getAccessToken();
       if (currentToken && !TokenManager.isTokenExpired(currentToken)) {
+        console.log('🔍 Calling /me with token:', currentToken?.substring(0, 50) + '...');
         const user = await AuthAPI.getCurrentUser(currentToken);
+        console.log('✅ User fetched successfully:', user);
         setState({
           user,
           isLoading: false,
@@ -118,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         _setUnauthenticatedState();
       }
     } catch (error) {
+      console.error('❌ updateAuthState failed:', error);
       TokenManager.clearTokens();
       _setUnauthenticatedState();
     }

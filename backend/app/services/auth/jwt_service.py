@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -13,7 +13,7 @@ class JWTService:
     """JWT token management with secure practices."""
     
     def __init__(self):
-        self.secret_key = settings.SECRET_KEY
+        self.secret_key = settings.SECRET_KEY.get_secret_value()
         self.algorithm = settings.ALGORITHM
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
         self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
@@ -98,9 +98,7 @@ class JWTService:
             
             return payload
             
-        except jwt.ExpiredSignatureError:
-            raise AuthenticationError("Token has expired")
-        except jwt.JWTError as e:
+        except JWTError as e:
             raise AuthenticationError(f"Invalid token: {str(e)}")
     
     def get_user_id_from_token(self, token: str) -> str:

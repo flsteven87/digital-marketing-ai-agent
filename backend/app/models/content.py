@@ -1,4 +1,11 @@
-"""SQLAlchemy models for content and marketing functionality."""
+"""DEPRECATED: Legacy SQLAlchemy models for content and marketing functionality.
+
+⚠️  DEPRECATED: This file is deprecated as of Phase 1 database architecture unification.
+Use app.models.user_async.py for all new development.
+
+This file is kept for backward compatibility during the transition period
+and will be removed in a future version.
+"""
 
 from datetime import datetime
 from typing import Optional

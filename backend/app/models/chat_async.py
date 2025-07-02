@@ -19,13 +19,14 @@ class ChatSession(Base):
     # Primary key
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     
-    # Foreign keys - temporarily without FK constraint until user model migration
+    # Foreign keys
     user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False, 
         index=True
     )
-    # Brand ID - temporarily without FK constraint until brands model is implemented
     brand_id: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("brands.id", ondelete="SET NULL"),
         index=True
     )
     
@@ -46,18 +47,18 @@ class ChatSession(Base):
         onupdate=func.now()
     )
 
-    # Relationships (will be defined when user models are migrated)
-    # user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
-    # brand: Mapped[Optional["Brand"]] = relationship("Brand", back_populates="chat_sessions")
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
+    brand: Mapped[Optional["Brand"]] = relationship("Brand", back_populates="chat_sessions")
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage", 
         back_populates="session", 
         cascade="all, delete-orphan",
         order_by="ChatMessage.created_at"
     )
-    # generated_content: Mapped[List["GeneratedContent"]] = relationship(
-    #     "GeneratedContent", back_populates="session"
-    # )
+    generated_content: Mapped[List["GeneratedContent"]] = relationship(
+        "GeneratedContent", back_populates="session"
+    )
 
     def __repr__(self) -> str:
         return f"<ChatSession(id={self.id}, title='{self.title}')>"

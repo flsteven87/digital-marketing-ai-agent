@@ -1,23 +1,18 @@
 """SQLAlchemy models for the AI Marketing Assistant.
 
-Import all models here to ensure they are registered with SQLAlchemy.
+DEPRECATED: This module is kept for backward compatibility only.
+Use app.models.async_models for all new development.
 """
 
-from app.core.database import Base
+# Import async models for backward compatibility
+from app.models.async_models import *
 
-# Import all models to register them with SQLAlchemy
-from app.models.user import User, OAuthProvider, UserSession, AuthAuditLog
-# Note: Chat models moved to chat_async.py for modern async architecture
-from app.models.content import Organization, Brand, GeneratedContent
-
-# Export all models for easy importing (excluding chat models)
-__all__ = [
-    "Base",
-    "User",
-    "OAuthProvider", 
-    "UserSession",
-    "AuthAuditLog",
-    "Organization",
-    "Brand",
-    "GeneratedContent",
-]
+# Keep the legacy imports for any code that still depends on them
+# These will be removed in a future version
+try:
+    from app.models.user import User as LegacyUser
+    from app.models.content import Organization as LegacyOrganization
+    # Add any other legacy imports as needed
+except ImportError:
+    # Legacy models may not be available if database.py is removed
+    pass

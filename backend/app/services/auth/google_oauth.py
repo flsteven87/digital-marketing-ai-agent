@@ -18,7 +18,7 @@ class GoogleOAuthService:
     
     def __init__(self):
         self.client_id = settings.GOOGLE_CLIENT_ID
-        self.client_secret = settings.GOOGLE_CLIENT_SECRET
+        self.client_secret = settings.GOOGLE_CLIENT_SECRET.get_secret_value() if settings.GOOGLE_CLIENT_SECRET else None
         self.redirect_uri = settings.GOOGLE_REDIRECT_URI
         self.is_configured = bool(self.client_id and self.client_secret)
         
@@ -33,35 +33,72 @@ class GoogleOAuthService:
         # Redis client for state management
         self.redis_client = None
         self.state_expiry = 600  # 10 minutes
+        
+        # In-memory fallback for development when Redis is not available
+        self._memory_store = {}
+        self._use_memory_store = False
 
     async def _get_redis_client(self):
-        """Get Redis client connection."""
-        if not self.redis_client:
-            self.redis_client = redis.from_url(settings.REDIS_URL)
+        """Get Redis client connection with fallback to memory store."""
+        if not self.redis_client and not self._use_memory_store:
+            try:
+                self.redis_client = redis.from_url(settings.REDIS_URL)
+                # Test connection
+                await self.redis_client.ping()
+            except Exception:
+                # Fall back to in-memory store for development
+                self._use_memory_store = True
+                print("⚠️  Redis not available, using in-memory store for OAuth state (development only)")
         return self.redis_client
 
     async def _store_oauth_state(self, state: str, session_data: Dict):
-        """Store OAuth state in Redis."""
-        redis_client = await self._get_redis_client()
-        key = f"oauth_state:{state}"
-        await redis_client.setex(
-            key, 
-            self.state_expiry, 
-            json.dumps({
+        """Store OAuth state in Redis or memory store."""
+        if self._use_memory_store:
+            # Store in memory with expiration
+            expiry_time = datetime.now() + timedelta(seconds=self.state_expiry)
+            self._memory_store[state] = {
                 **session_data,
-                'created_at': datetime.now().isoformat()
-            })
-        )
+                'created_at': datetime.now().isoformat(),
+                'expires_at': expiry_time.isoformat()
+            }
+        else:
+            redis_client = await self._get_redis_client()
+            key = f"oauth_state:{state}"
+            await redis_client.setex(
+                key, 
+                self.state_expiry, 
+                json.dumps({
+                    **session_data,
+                    'created_at': datetime.now().isoformat()
+                })
+            )
 
     async def _get_oauth_state(self, state: str) -> Optional[Dict]:
-        """Retrieve OAuth state from Redis."""
-        redis_client = await self._get_redis_client()
-        key = f"oauth_state:{state}"
-        data = await redis_client.get(key)
-        if data:
-            await redis_client.delete(key)  # Clean up after use
-            return json.loads(data)
-        return None
+        """Retrieve OAuth state from Redis or memory store."""
+        if self._use_memory_store:
+            # Get from memory store
+            data = self._memory_store.get(state)
+            if data:
+                # Check expiration
+                expires_at = datetime.fromisoformat(data['expires_at'])
+                if datetime.now() < expires_at:
+                    # Clean up after use
+                    del self._memory_store[state]
+                    # Remove expires_at before returning
+                    data.pop('expires_at', None)
+                    return data
+                else:
+                    # Expired, clean up
+                    del self._memory_store[state]
+            return None
+        else:
+            redis_client = await self._get_redis_client()
+            key = f"oauth_state:{state}"
+            data = await redis_client.get(key)
+            if data:
+                await redis_client.delete(key)  # Clean up after use
+                return json.loads(data)
+            return None
         
     async def get_authorization_url(self, state: str = None) -> tuple[str, str]:
         """Generate Google OAuth authorization URL with proper session management."""

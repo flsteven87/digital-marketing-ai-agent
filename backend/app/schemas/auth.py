@@ -1,6 +1,8 @@
 """Authentication related Pydantic schemas."""
 
 from typing import Optional, Dict, Any
+from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr
 
 
@@ -38,15 +40,15 @@ class TokenResponse(BaseModel):
 
 class UserProfile(BaseModel):
     """User profile schema."""
-    id: str
+    id: UUID
     email: EmailStr
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     company: Optional[str] = None
     role: str = "user"
     is_active: bool = True
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class LoginResponse(BaseModel):

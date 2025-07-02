@@ -7,7 +7,7 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import selectinload
 
 from app.repositories.base import BaseRepository
-from app.models.user import User
+from app.models.user_async import User
 
 
 class UserRepository(BaseRepository[User]):

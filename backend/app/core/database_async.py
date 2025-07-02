@@ -5,7 +5,6 @@ This will gradually replace the legacy database.py
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -17,27 +16,28 @@ class Base(DeclarativeBase):
 
 # Create async engine with modern configuration
 def create_async_database_engine():
-    """Create async engine with optimal configuration for PostgreSQL"""
+    """Create async engine optimized for Supabase Session Mode Pooler"""
     if not settings.DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is required")
     
-    # Convert to async URL and handle PostgreSQL connection string
+    # Convert to async URL
     database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
     
-    # NullPool doesn't support pool_size/max_overflow
+    # Optimized configuration for Supabase Session Mode (port 6543)
+    # Session mode supports prepared statements and behaves like direct connection
     engine_kwargs = {
-        "echo": False,  # Set to True for SQL debugging
-        "pool_pre_ping": True,  # Verify connections before use
-        # Use NullPool for pgbouncer compatibility
-        "poolclass": NullPool,  # Always use NullPool with pgbouncer
-        # Disable prepared statement caching for pgbouncer compatibility
+        "echo": False,
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_timeout": 30,
+        "pool_recycle": 1800,  # 30 minutes for pooler
         "connect_args": {
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
+            "command_timeout": 60,
             "server_settings": {
-                "jit": "off"
+                "application_name": "digital_marketing_ai_agent"
             }
-        },
+        }
     }
     
     return create_async_engine(database_url, **engine_kwargs)
@@ -58,14 +58,8 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency to get async database session.
     
-    Provides automatic transaction management:
-    - Commits on success
-    - Rollbacks on exception
-    - Session lifecycle managed by AsyncSessionLocal context manager
-    
-    Note: You may see IllegalStateChangeError exceptions during shutdown.
-    This is a known issue with SQLAlchemy async + pgbouncer when the event
-    loop closes. It doesn't affect normal operation and can be safely ignored.
+    Provides automatic transaction management with proper async context handling.
+    Uses context manager to avoid concurrent session state issues.
     """
     async with AsyncSessionLocal() as session:
         try:
@@ -79,8 +73,8 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_async_db():
     """Initialize database tables using async engine"""
     async with async_engine.begin() as conn:
-        # Import all models to ensure they're registered
-        from app.models import user, chat, content  # noqa
+        # Import all async models to ensure they're registered
+        from app.models import async_models  # noqa
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

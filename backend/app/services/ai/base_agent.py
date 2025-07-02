@@ -11,7 +11,7 @@ class BaseAgent:
     def __init__(self, model_name: str = "gpt-4o-mini"):
         self.llm = ChatOpenAI(
             model=model_name,
-            api_key=settings.OPENAI_API_KEY,
+            api_key=settings.OPENAI_API_KEY.get_secret_value(),
             temperature=0.7
         )
         self.agent = None

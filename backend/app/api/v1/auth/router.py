@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 import secrets
 
-from app.core import security
+from app.services.auth.jwt_service import JWTService
 from app.schemas.auth import (
     Token, UserRegister, GoogleOAuthRequest, LoginResponse,
     AuthorizationUrlResponse, TokenResponse, UserProfile, RefreshTokenRequest
@@ -17,7 +17,6 @@ from app.api.deps import get_current_user
 router = APIRouter()
 
 # Initialize OAuth services
-user_service = UserService()
 google_oauth = GoogleOAuthService()
 
 
@@ -58,8 +57,9 @@ async def google_callback(request: GoogleOAuthRequest) -> Any:
         # Get user info
         user_info = await google_oauth.get_user_info(token_data["access_token"])
         
-        # Create or update user
-        auth_result = await user_service.create_or_update_user_from_google(user_info)
+        # Create or update user using async context manager
+        async with UserService() as user_service:
+            auth_result = await user_service.create_or_update_user_from_google(user_info)
         
         return LoginResponse(
             user=UserProfile(**auth_result["user"]),
@@ -110,31 +110,28 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
 async def refresh_token(request: RefreshTokenRequest) -> Any:
     """Refresh access token using refresh token."""
     try:
+        jwt_service = JWTService()
         refresh_token = request.refresh_token
         
-        payload = security.decode_token(refresh_token)
-        if payload.type != "refresh":
+        # Verify refresh token
+        payload = jwt_service.verify_token(refresh_token, token_type="refresh")
+        user_id = payload.get("sub")
+        
+        if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type"
-            )
-        
-        if not payload.sub:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invalid token payload"
             )
         
-        # Generate new tokens using the user ID from the payload
-        access_token = security.create_access_token(payload.sub)
-        new_refresh_token = security.create_refresh_token(payload.sub)
+        # Generate new token pair
+        tokens = jwt_service.create_token_pair(user_id)
         
         return TokenResponse(
-            access_token=access_token,
-            refresh_token=new_refresh_token,
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
             token_type="bearer"
         )
-    except ValueError:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"

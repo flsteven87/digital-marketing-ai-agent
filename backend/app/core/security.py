@@ -37,7 +37,7 @@ def create_access_token(
         "type": "access"
     }
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        to_encode, settings.SECRET_KEY.get_secret_value(), algorithm=settings.ALGORITHM
     )
     return encoded_jwt
 
@@ -58,7 +58,7 @@ def create_refresh_token(
         "type": "refresh"
     }
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        to_encode, settings.SECRET_KEY.get_secret_value(), algorithm=settings.ALGORITHM
     )
     return encoded_jwt
 
@@ -74,7 +74,7 @@ def get_password_hash(password: str) -> str:
 def decode_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, settings.SECRET_KEY.get_secret_value(), algorithms=[settings.ALGORITHM]
         )
         return TokenPayload(**payload)
     except jwt.JWTError:

@@ -128,7 +128,6 @@ fresh-start: ## Clean database and restart everything (Phase 1 modernization)
 		echo "${BLUE}Stopping all services...${NC}"; \
 		$(MAKE) down; \
 		echo "${BLUE}Cleaning up containers (keeping Python dependencies)...${NC}"; \
-		docker-compose down; \
 		docker volume rm digital-marketing-ai-agent_redis-data 2>/dev/null || true; \
 		echo "${BLUE}Starting services...${NC}"; \
 		$(MAKE) up; \

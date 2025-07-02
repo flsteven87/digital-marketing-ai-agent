@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import select, and_
 
 from app.repositories.base import BaseRepository
-from app.models.user import OAuthProvider
+from app.models.user_async import OAuthProvider
 
 
 class OAuthProviderRepository(BaseRepository[OAuthProvider]):

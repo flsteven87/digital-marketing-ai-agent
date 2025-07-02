@@ -1,4 +1,11 @@
-"""SQLAlchemy models for user and authentication."""
+"""DEPRECATED: Legacy SQLAlchemy models for user and authentication.
+
+⚠️  DEPRECATED: This file is deprecated as of Phase 1 database architecture unification.
+Use app.models.user_async.py for all new development.
+
+This file is kept for backward compatibility during the transition period
+and will be removed in a future version.
+"""
 
 from uuid import uuid4
 from sqlalchemy import Column, String, Boolean, DateTime, UUID, Text, JSON, ForeignKey

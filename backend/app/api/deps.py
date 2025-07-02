@@ -7,11 +7,11 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core import security
 from app.core.config import settings
 from app.core.database_async import get_async_db
 from app.repositories.user import UserRepository
 from app.schemas.user import User
+from app.services.auth.jwt_service import JWTService
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
@@ -31,41 +31,61 @@ async def get_current_user(
     )
     
     try:
-        payload = security.decode_token(token)
-        if payload.type != "access":
-            raise credentials_exception
-        user_id: str = payload.sub
+        jwt_service = JWTService()
+        print(f"🔍 Verifying token: {token[:50]}...")
+        payload = jwt_service.verify_token(token, token_type="access")
+        print(f"✅ Token verified, payload: {payload}")
+        user_id: str = payload.get("sub")
         if user_id is None:
+            print("❌ No user_id in payload")
             raise credentials_exception
-    except (JWTError, ValidationError):
+        print(f"✅ Extracted user_id: {user_id}")
+    except Exception as e:
+        print(f"❌ Token verification failed: {type(e).__name__}: {str(e)}")
         raise credentials_exception
     
-    # Use unified repository pattern
-    from app.models.user import User as UserModel
+    # Use unified repository pattern with async models
+    from app.models.user_async import User as UserModel
     user_repo = UserRepository(UserModel, db)
-    user = await user_repo.get(UUID(user_id))
+    print(f"🔍 Looking up user in database: {user_id}")
+    
+    try:
+        user = await user_repo.get(UUID(user_id))
+        print(f"✅ User found in database: {user.email if user else 'None'}")
+    except Exception as e:
+        print(f"❌ Database query failed: {type(e).__name__}: {str(e)}")
+        raise credentials_exception
     
     if not user:
+        print(f"❌ User not found in database: {user_id}")
         raise credentials_exception
     
+    print(f"✅ User lookup successful, returning user data")
+    
     # Convert to Pydantic schema
-    return User(
-        id=user.id,
-        email=user.email,
-        email_verified=user.email_verified,
-        name=user.name,
-        avatar_url=user.avatar_url,
-        company=user.company,
-        role=user.role,
-        phone=user.phone,
-        timezone=user.timezone or "UTC",
-        locale=user.locale or "en",
-        is_active=user.is_active,
-        metadata=user.user_metadata or {},
-        created_at=user.created_at,
-        updated_at=user.updated_at,
-        last_login_at=user.last_login_at
-    )
+    try:
+        result = User(
+            id=user.id,
+            email=user.email,
+            email_verified=user.email_verified,
+            name=user.name,
+            avatar_url=user.avatar_url,
+            company=user.company,
+            role=user.role,
+            phone=user.phone,
+            timezone=user.timezone or "UTC",
+            locale=user.locale or "en",
+            is_active=user.is_active,
+            metadata=user.user_metadata or {},
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            last_login_at=user.last_login_at
+        )
+        print(f"✅ User schema conversion successful")
+        return result
+    except Exception as e:
+        print(f"❌ User schema conversion failed: {type(e).__name__}: {str(e)}")
+        raise credentials_exception
 
 
 async def get_current_active_user(

@@ -36,7 +36,12 @@ export default function AuthCallback() {
         const loginResponse = await AuthAPI.handleGoogleCallback(code, state);
         
         // Store tokens
+        console.log('📦 Storing tokens:', loginResponse.tokens);
         TokenManager.setTokens(loginResponse.tokens);
+        
+        // Verify tokens were stored
+        const storedToken = TokenManager.getAccessToken();
+        console.log('✅ Token stored successfully:', storedToken?.substring(0, 50) + '...');
         
         // Update auth context immediately
         await updateAuthState();
@@ -55,8 +60,11 @@ export default function AuthCallback() {
       }
     };
 
-    handleCallback();
-  }, [searchParams, router]);
+    // Only run once when component mounts or search params change
+    if (status === 'loading') {
+      handleCallback();
+    }
+  }, [searchParams]);
 
   const handleReturnHome = () => {
     router.push('/');
